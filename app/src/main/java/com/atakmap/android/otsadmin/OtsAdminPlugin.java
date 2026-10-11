@@ -182,6 +182,8 @@ public class OtsAdminPlugin implements IPlugin {
             connectButton.setOnClickListener(v -> connect());
             root.findViewById(R.id.ots_refresh)
                     .setOnClickListener(v -> loadSection());
+            root.findViewById(R.id.ots_settings)
+                    .setOnClickListener(v -> promptServerSettings());
             buildSectionBar();
             pane = new PaneBuilder(root)
                     .setMetaValue(Pane.RELATIVE_LOCATION,
@@ -431,6 +433,59 @@ public class OtsAdminPlugin implements IPlugin {
         b.setTextSize(11);
         b.setOnClickListener(v -> onClick.run());
         return b;
+    }
+
+    /**
+     * The server details, editable from the pane.
+     *
+     * The same three values live in ATAK Settings > Tools > OTS Admin and
+     * both routes write the same preference keys, so neither is a copy of
+     * the other's state. This one exists because the settings tree is five
+     * taps away from the map and this is one, and because saving here can
+     * reconnect straight away rather than leaving a second button to press.
+     *
+     * The password field is masked but pre-filled: a blank box would mean
+     * retyping it to change only the URL, which is how people end up
+     * leaving passwords in a text file instead.
+     */
+    private void promptServerSettings() {
+        SharedPreferences prefs = PreferenceManager
+                .getDefaultSharedPreferences(
+                        MapView.getMapView().getContext());
+        final EditText url = field("https://tak.example.org", false);
+        url.setText(prefs.getString(OtsSession.PREF_URL, ""));
+        final EditText user = field("Username", false);
+        user.setText(prefs.getString(OtsSession.PREF_USER, ""));
+        final EditText pass = field("Password", true);
+        pass.setText(prefs.getString(OtsSession.PREF_PASS, ""));
+
+        TextView note = new TextView(pluginContext);
+        note.setText("The same username and password you use on the web UI."
+                + " Stored unencrypted in ATAK's preferences, so prefer a"
+                + " dedicated administrator account.");
+        note.setTextSize(11);
+        note.setTextColor(0xFF90A4AE);
+        note.setPadding(0, 10, 0, 0);
+
+        new AlertDialog.Builder(MapView.getMapView().getContext())
+                .setTitle("OpenTAKServer")
+                .setView(column(url, user, pass, note))
+                .setPositiveButton("Save and connect", (d, w) -> {
+                    prefs.edit()
+                            .putString(OtsSession.PREF_URL,
+                                    url.getText().toString().trim())
+                            .putString(OtsSession.PREF_USER,
+                                    user.getText().toString().trim())
+                            .putString(OtsSession.PREF_PASS,
+                                    pass.getText().toString())
+                            .apply();
+                    // A changed server means the old token is meaningless.
+                    session.disconnect();
+                    renderSession();
+                    connect();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void promptAddUser() {

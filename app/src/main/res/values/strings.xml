@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">OTS Admin</string>
     <string name="app_desc">Administer an OpenTAKServer from the map</string>
-    <string name="version_label">v0.1.0</string>
+    <string name="version_label">v0.2.0</string>
 
     <!-- Settings -->
     <string name="preferences_summary">Server address and the account OTS Admin signs in with</string>

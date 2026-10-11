@@ -48,6 +48,14 @@
             android:layout_height="wrap_content"
             android:text="Refresh"
             android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/ots_settings"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="Server"
+            android:textSize="12sp" />
     </LinearLayout>
 
     <!-- Section chooser. Filled in code from OtsSection so adding a view is
