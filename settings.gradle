@@ -1,0 +1,4 @@
+// Pinned, so the clone folder name cannot change the APK name.
+rootProject.name = 'OtsAdmin-Plugin'
+
+include ':app'

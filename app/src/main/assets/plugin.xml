@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plugin entry point - ATAK discovers and loads the plugin via this file. -->
+<plugin>
+
+    <extension
+        type="gov.tak.api.plugin.IPlugin"
+        impl="com.atakmap.android.otsadmin.OtsAdminPlugin"
+        singleton="true" />
+
+</plugin>
