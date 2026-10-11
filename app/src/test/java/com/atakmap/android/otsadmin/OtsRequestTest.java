@@ -58,6 +58,28 @@ public class OtsRequestTest {
     }
 
     @Test
+    public void bothDirectionsIsTwoRequestsBecauseTheServerHasNoBoth() {
+        // add_user_to_group rejects anything that is not exactly IN or OUT.
+        // Both is still reachable: groups_users is keyed on
+        // (user_id, group_id, DIRECTION), so direction is part of a
+        // membership's identity and a user can hold two rows for one group.
+        java.util.List<OtsRequest> both = OtsRequest.addGroupMembersBoth(
+                Arrays.asList("alice"), "Bravo");
+        assertEquals(2, both.size());
+        assertTrue(both.get(0).body.contains("\"direction\":\"IN\""));
+        assertTrue(both.get(1).body.contains("\"direction\":\"OUT\""));
+        for (OtsRequest r : both) {
+            // Both go to the same place as a single-direction add.
+            assertEquals(OtsRequest.Method.PUT, r.method);
+            assertEquals(BASE + "/api/groups", r.url(BASE));
+            assertTrue(r.body.contains("\"users\":[\"alice\"]"));
+            assertTrue(r.body.contains("\"group_name\":\"Bravo\""));
+            // And neither ever sends the word BOTH, which earns a 400.
+            assertFalse(r.body, r.body.contains("BOTH"));
+        }
+    }
+
+    @Test
     public void theGroupsCollectionCarriesThreeDifferentVerbs() {
         // POST creates, PUT adds a member, DELETE removes the group - all on
         // /api/groups, which is why none of them can share a builder. Only

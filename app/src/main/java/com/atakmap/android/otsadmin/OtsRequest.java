@@ -297,6 +297,32 @@ public final class OtsRequest {
                 new LinkedHashMap<String, String>(), OtsJson.of(parts));
     }
 
+    /**
+     * Add users to a group in BOTH directions.
+     *
+     * <b>The server has no "BOTH" value</b> - {@code add_user_to_group}
+     * rejects anything that is not exactly {@code IN} or {@code OUT}. But
+     * both is still reachable, because of how the membership is keyed:
+     * {@code groups_users} has a composite primary key of
+     * <b>(user_id, group_id, direction)</b>, so direction is part of the
+     * identity of a membership and one user can hold two rows for one group.
+     *
+     * So this is two requests, not one value. Returned as a list rather than
+     * sent here, so the caller can report both outcomes - the second can
+     * fail on its own and claiming success from the first would be a lie.
+     *
+     * The consequence to remember: a user added both ways has TWO
+     * memberships, shows as two rows, and needs two removals. That is the
+     * server's model, not a quirk of this plugin.
+     */
+    public static List<OtsRequest> addGroupMembersBoth(
+            List<String> usernames, String groupName) {
+        List<OtsRequest> out = new ArrayList<>();
+        out.add(addGroupMembers(usernames, groupName, "IN"));
+        out.add(addGroupMembers(usernames, groupName, "OUT"));
+        return out;
+    }
+
     /** Remove one user from a group. QUERY PARAMETERS, one user at a time. */
     public static OtsRequest removeGroupMember(String username,
             String groupName, String direction) {

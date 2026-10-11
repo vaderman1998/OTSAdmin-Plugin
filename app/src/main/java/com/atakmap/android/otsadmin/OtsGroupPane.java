@@ -246,43 +246,74 @@ public class OtsGroupPane {
         dirLabel.setTextColor(0xFF90A4AE);
         dirLabel.setPadding(0, 12, 0, 0);
 
-        // Two buttons rather than a text field: the server takes IN or OUT
-        // and nothing else, so there is nothing to type and typing "BOTH"
-        // only earns a refusal.
+        // Buttons rather than a text field: the server takes IN or OUT and
+        // nothing else, so there is nothing to type.
+        //
+        // BOTH is offered even though the server has no such value, because
+        // it is reachable - groups_users is keyed on (user, group,
+        // DIRECTION), so a user can hold one IN row and one OUT row for the
+        // same group. Picking it sends two requests. The note below says so,
+        // because the consequence is visible: they then appear as two
+        // members and need two removals.
         final String[] chosen = { OtsWriteGuard.DIRECTION_IN };
         final Button in = button(OtsWriteGuard.DIRECTION_IN, null);
         final Button out = button(OtsWriteGuard.DIRECTION_OUT, null);
+        final Button both = button(DIRECTION_BOTH, null);
+        final Button[] all = { in, out, both };
         View.OnClickListener pick = v -> {
             chosen[0] = v == in ? OtsWriteGuard.DIRECTION_IN
-                    : OtsWriteGuard.DIRECTION_OUT;
-            in.setAlpha(v == in ? 1f : 0.45f);
-            out.setAlpha(v == out ? 1f : 0.45f);
+                    : v == out ? OtsWriteGuard.DIRECTION_OUT
+                            : DIRECTION_BOTH;
+            for (Button b : all)
+                b.setAlpha(b == v ? 1f : 0.45f);
         };
-        in.setOnClickListener(pick);
-        out.setOnClickListener(pick);
+        for (Button b : all)
+            b.setOnClickListener(pick);
         out.setAlpha(0.45f);
+        both.setAlpha(0.45f);
         LinearLayout dirRow = new LinearLayout(pluginContext);
         dirRow.setOrientation(LinearLayout.HORIZONTAL);
         dirRow.addView(in);
         dirRow.addView(out);
+        dirRow.addView(both);
+
+        final TextView dirNote = new TextView(pluginContext);
+        dirNote.setText("Both adds two memberships, so the user appears"
+                + " twice and needs removing twice. That is how the server"
+                + " stores it.");
+        dirNote.setTextSize(10);
+        dirNote.setTextColor(0xFF78909C);
+        dirNote.setPadding(0, 6, 0, 0);
 
         new AlertDialog.Builder(MapView.getMapView().getContext())
                 .setTitle("Add to " + groupName)
-                .setView(column(users, dirLabel, dirRow))
+                .setView(column(users, dirLabel, dirRow, dirNote))
                 .setPositiveButton("Add", (d, w) -> {
                     List<String> list = splitList(
                             users.getText().toString());
+                    boolean wantsBoth = DIRECTION_BOTH.equals(
+                            chosen[0]);
+                    // The guard checks what actually goes on the wire, so
+                    // BOTH is validated as IN - which is one of the two
+                    // requests it becomes.
+                    String checkDir = wantsBoth
+                            ? OtsWriteGuard.DIRECTION_IN : chosen[0];
                     String blocked = OtsWriteGuard.blockGroupMembers(list,
-                            groupName, chosen[0], session.isLdap());
+                            groupName, checkDir, session.isLdap());
                     if (blocked != null) {
                         say(blocked);
                         return;
                     }
-                    write(OtsRequest.addGroupMembers(list, groupName,
-                            chosen[0]),
-                            "Added " + list.size()
-                                    + (list.size() == 1 ? " user to "
-                                            : " users to ") + groupName);
+                    String what = list.size()
+                            + (list.size() == 1 ? " user" : " users")
+                            + " to " + groupName;
+                    if (wantsBoth)
+                        writeAll(OtsRequest.addGroupMembersBoth(list,
+                                groupName), "Added " + what
+                                + ", in both directions");
+                    else
+                        write(OtsRequest.addGroupMembers(list, groupName,
+                                chosen[0]), "Added " + what);
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
@@ -322,6 +353,53 @@ public class OtsGroupPane {
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    /**
+     * UI-only. The server has no such direction; see
+     * {@link OtsRequest#addGroupMembersBoth}.
+     */
+    private static final String DIRECTION_BOTH = "BOTH";
+
+    /**
+     * Send several requests in order and report them as one outcome.
+     *
+     * Stops at the first failure and says which step it was. Carrying on
+     * after one fails would leave the group half-changed while reporting
+     * success, and "added in both directions" when only IN took is a worse
+     * answer than a plain error.
+     */
+    private void writeAll(final List<OtsRequest> requests,
+            final String successText) {
+        statusView.setText("Working\u2026");
+        run(() -> {
+            String failure = null;
+            int done = 0;
+            for (OtsRequest request : requests) {
+                OtsClient.Result r = session.client().send(request);
+                String why = r.failure();
+                if (why == null && !OtsResponse.succeeded(r.body))
+                    why = "the server did not confirm it";
+                if (why != null) {
+                    failure = done == 0 ? why
+                            : "step " + (done + 1) + " of "
+                                    + requests.size() + " failed: " + why;
+                    break;
+                }
+                done++;
+            }
+            final String problem = failure;
+            ui.post(() -> {
+                if (problem == null) {
+                    say(successText);
+                } else {
+                    if (OtsWriteGuard.looksLikeLdapRefusal(problem))
+                        session.noteLdapRefusal();
+                    say(problem);
+                }
+                load();
+            });
+        });
     }
 
     private void write(final OtsRequest request, final String successText) {
