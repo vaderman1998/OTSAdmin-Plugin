@@ -6,9 +6,8 @@
     android:background="#FF14171A"
     android:padding="10dp">
 
-    <!-- Connection. First thing on the pane because nothing below it works
-         until this says Connected, and the reason it does not is the most
-         useful line on the screen. -->
+    <!-- Connection. First, because nothing below it works until this says
+         Connected, and the reason it does not is the most useful line here. -->
     <TextView
         android:id="@+id/ots_status"
         android:layout_width="match_parent"
@@ -31,7 +30,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:paddingTop="6dp"
-        android:paddingBottom="6dp">
+        android:paddingBottom="4dp">
 
         <Button
             android:id="@+id/ots_connect"
@@ -39,14 +38,6 @@
             android:layout_weight="1"
             android:layout_height="wrap_content"
             android:text="Connect"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/ots_refresh"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:text="Refresh"
             android:textSize="12sp" />
 
         <Button
@@ -58,45 +49,30 @@
             android:textSize="12sp" />
     </LinearLayout>
 
-    <!-- Section chooser. Filled in code from OtsSection so adding a view is
-         one line there and nothing here. -->
-    <HorizontalScrollView
+    <View
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:scrollbars="none">
-
-        <LinearLayout
-            android:id="@+id/ots_sections"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal" />
-    </HorizontalScrollView>
-
-    <!-- Actions for the current section. Only shown where there are any. -->
-    <LinearLayout
-        android:id="@+id/ots_actions"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingTop="4dp"
-        android:visibility="gone" />
+        android:layout_height="1dp"
+        android:background="#FF2E3A42" />
 
     <TextView
-        android:id="@+id/ots_section_status"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:text="Open a section"
         android:textColor="#FF90A4AE"
         android:textSize="11sp"
-        android:paddingTop="6dp"
+        android:paddingTop="8dp"
         android:paddingBottom="4dp" />
 
+    <!-- One full-width button per section, each opening its own page.
+         Filled in code from OtsSection, so adding a view is one line there
+         and nothing here. -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
 
         <LinearLayout
-            android:id="@+id/ots_list"
+            android:id="@+id/ots_sections"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical" />
