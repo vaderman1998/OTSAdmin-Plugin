@@ -165,6 +165,8 @@ public class OtsAdminPlugin implements IPlugin {
             root.findViewById(R.id.ots_settings)
                     .setOnClickListener(v -> promptServerSettings());
             buildSectionList();
+            ((TextView) root.findViewById(R.id.ots_version))
+                    .setText(versionLine());
             pane = new PaneBuilder(root)
                     .setMetaValue(Pane.RELATIVE_LOCATION,
                             Pane.Location.Default)
@@ -177,6 +179,35 @@ public class OtsAdminPlugin implements IPlugin {
         renderSession();
         if (session != null && !session.isReady())
             connect();
+    }
+
+    /**
+     * The build, as "OTS Admin 0.8.0 (25e117f9) - [5.6.0]".
+     *
+     * Read from the installed package rather than from
+     * {@code BuildConfig.PLUGIN_VERSION}, because the package carries the
+     * whole takdev string: the semantic version, the <b>commit hash</b> and
+     * the ATAK version it was built against. All three answer a real
+     * question - the hash says whether a fix is actually on the device after
+     * several installs in a session, and the ATAK version is what decides
+     * whether the plugin loads at all on this host.
+     *
+     * Falls back to the string resource, which is bumped with the version,
+     * if the package cannot be read.
+     */
+    private String versionLine() {
+        String name = pluginContext.getString(R.string.app_name);
+        try {
+            String full = pluginContext.getPackageManager()
+                    .getPackageInfo(pluginContext.getPackageName(), 0)
+                    .versionName;
+            if (full != null && !full.trim().isEmpty())
+                return name + " " + full.trim();
+        } catch (Exception e) {
+            Log.w(TAG, "could not read the plugin version", e);
+        }
+        return name + " "
+                + pluginContext.getString(R.string.version_label);
     }
 
     /** Coming back from a section page: close it, show this one. */

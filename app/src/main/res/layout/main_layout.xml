@@ -80,4 +80,15 @@
             android:orientation="vertical" />
     </ScrollView>
 
+    <!-- Which build this is. Worth a line: several versions of this plugin
+         get installed over each other in a session, and "is the fix in?" is
+         not answerable from the behaviour alone. -->
+    <TextView
+        android:id="@+id/ots_version"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#FF607D8B"
+        android:textSize="10sp"
+        android:paddingTop="6dp" />
+
 </LinearLayout>
