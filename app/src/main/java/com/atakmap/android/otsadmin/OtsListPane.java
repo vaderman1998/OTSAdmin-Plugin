@@ -64,6 +64,18 @@ public class OtsListPane {
 
     private OtsSection section = OtsSection.EUDS;
 
+    /** Set by the plugin; opens one group's own page. */
+    private GroupOpener groupOpener;
+
+    /** How the list asks for a group to be opened. */
+    public interface GroupOpener {
+        void open(String groupName, String description);
+    }
+
+    public void setGroupOpener(GroupOpener opener) {
+        this.groupOpener = opener;
+    }
+
     public OtsListPane(Context pluginContext, IHostUIService uiService,
             OtsSession session, Runnable onBack) {
         this.pluginContext = pluginContext;
@@ -194,16 +206,29 @@ public class OtsListPane {
                         LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         head.addView(title, grow);
 
-        if (which.writable && session.isAdmin() && !session.isLdap()) {
+        if (which == OtsSection.GROUPS) {
+            // A group has something inside it, so the row opens rather than
+            // offering a delete: who is in it is the thing you came to see,
+            // and deleting it lives on that page next to its members.
+            final String desc = readable(row, "description");
+            Button open = new Button(pluginContext);
+            open.setText("Members \u203a");
+            open.setTextSize(10);
+            open.setOnClickListener(v -> {
+                if (groupOpener != null)
+                    groupOpener.open(name, desc);
+            });
+            head.addView(open);
+            box.setOnClickListener(v -> {
+                if (groupOpener != null)
+                    groupOpener.open(name, desc);
+            });
+        } else if (which.writable && session.isAdmin()
+                && !session.isLdap()) {
             Button del = new Button(pluginContext);
             del.setText("Delete");
             del.setTextSize(10);
-            del.setOnClickListener(v -> {
-                if (which == OtsSection.USERS)
-                    confirmDeleteUser(name);
-                else
-                    confirmDeleteGroup(name);
-            });
+            del.setOnClickListener(v -> confirmDeleteUser(name));
             head.addView(del);
         }
         box.addView(head);
@@ -292,9 +317,9 @@ public class OtsListPane {
         if (section == OtsSection.USERS) {
             actionsBar.addView(action("Add user", this::promptAddUser));
         } else if (section == OtsSection.GROUPS) {
+            // Membership and delete now live on each group's own page,
+            // where the group is already known and its members are visible.
             actionsBar.addView(action("Add group", this::promptAddGroup));
-            actionsBar.addView(action("Membership",
-                    this::promptGroupMembership));
         }
     }
 
@@ -376,65 +401,7 @@ public class OtsListPane {
                 .show();
     }
 
-    private void confirmDeleteGroup(final String groupName) {
-        String blocked = OtsWriteGuard.blockDeleteGroup(groupName);
-        if (blocked != null) {
-            say(blocked);
-            return;
-        }
-        new AlertDialog.Builder(MapView.getMapView().getContext())
-                .setTitle("Delete group " + groupName + "?")
-                .setMessage("Members are not deleted, but they lose this"
-                        + " channel.")
-                .setPositiveButton("Delete", (d, w) -> write(
-                        OtsRequest.deleteGroup(groupName),
-                        "Deleted " + groupName))
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
 
-    private void promptGroupMembership() {
-        final EditText users = field("Usernames, comma separated", false);
-        final EditText group = field("Group name", false);
-        final EditText direction = field("Direction: IN or OUT", false);
-        direction.setText(OtsWriteGuard.DIRECTION_IN);
-        new AlertDialog.Builder(MapView.getMapView().getContext())
-                .setTitle("Group membership")
-                .setView(column(users, group, direction))
-                .setPositiveButton("Add to group", (d, w) -> {
-                    List<String> list = splitList(
-                            users.getText().toString());
-                    String dir = direction.getText().toString().trim()
-                            .toUpperCase(Locale.US);
-                    String blocked = OtsWriteGuard.blockGroupMembers(list,
-                            group.getText().toString(), dir,
-                            session.isLdap());
-                    if (blocked != null) {
-                        say(blocked);
-                        return;
-                    }
-                    write(OtsRequest.addGroupMembers(list,
-                            group.getText().toString().trim(), dir),
-                            "Added to " + group.getText().toString().trim());
-                })
-                .setNeutralButton("Remove one", (d, w) -> {
-                    List<String> list = splitList(
-                            users.getText().toString());
-                    String dir = direction.getText().toString().trim()
-                            .toUpperCase(Locale.US);
-                    if (list.size() != 1) {
-                        // The server removes one at a time; saying so beats
-                        // silently using the first of several.
-                        say("Removing takes exactly one username.");
-                        return;
-                    }
-                    write(OtsRequest.removeGroupMember(list.get(0),
-                            group.getText().toString().trim(), dir),
-                            "Removed " + list.get(0));
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
 
     /** Send a write, report the server's own answer, then reload. */
     private void write(final OtsRequest request, final String successText) {

@@ -79,6 +79,7 @@ public class OtsAdminPlugin implements IPlugin {
 
     private OtsSession session;
     private OtsListPane listPane;
+    private OtsGroupPane groupPane;
 
     public OtsAdminPlugin() {
     }
@@ -125,6 +126,14 @@ public class OtsAdminPlugin implements IPlugin {
         session = new OtsSession(prefs);
         listPane = new OtsListPane(pluginContext, uiService, session,
                 this::backFromList);
+        groupPane = new OtsGroupPane(pluginContext, uiService, session,
+                this::backToGroups);
+        // A group row opens its own page; Back from there returns to the
+        // group list rather than all the way to this pane.
+        listPane.setGroupOpener((name, description) -> {
+            listPane.hide();
+            groupPane.show(name, description);
+        });
     }
 
     @Override
@@ -133,6 +142,8 @@ public class OtsAdminPlugin implements IPlugin {
             uiService.removeToolbarItem(toolbarItem);
         if (listPane != null)
             listPane.dispose();
+        if (groupPane != null)
+            groupPane.dispose();
         exec.shutdownNow();
         if (session != null)
             session.disconnect();
@@ -173,6 +184,20 @@ public class OtsAdminPlugin implements IPlugin {
         if (listPane != null)
             listPane.hide();
         showPane();
+    }
+
+    /**
+     * Back from one group goes to the group LIST, not to the main pane.
+     *
+     * Three levels deep now, and skipping the middle one would mean
+     * reopening Groups every time you finished with a group - which is
+     * exactly when you are most likely to want the next one.
+     */
+    private void backToGroups() {
+        if (groupPane != null)
+            groupPane.hide();
+        if (listPane != null)
+            listPane.show(OtsSection.GROUPS);
     }
 
     /** One full-width button per section, straight from the enum. */

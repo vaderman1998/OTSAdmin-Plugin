@@ -58,13 +58,33 @@ public class OtsRequestTest {
     }
 
     @Test
+    public void theGroupsCollectionCarriesThreeDifferentVerbs() {
+        // POST creates, PUT adds a member, DELETE removes the group - all on
+        // /api/groups, which is why none of them can share a builder. Only
+        // the member REMOVAL uses the members sub-resource.
+        assertEquals(OtsRequest.Method.POST,
+                OtsRequest.addGroup("Bravo", null).method);
+        assertEquals(OtsRequest.Method.PUT,
+                OtsRequest.addGroupMembers(
+                        Arrays.asList("alice"), "Bravo", "IN").method);
+        assertEquals(OtsRequest.Method.DELETE,
+                OtsRequest.deleteGroup("Bravo").method);
+        assertEquals(BASE + "/api/groups/members?username=alice"
+                + "&group_name=Bravo&direction=IN",
+                OtsRequest.removeGroupMember("alice", "Bravo", "IN")
+                        .url(BASE));
+    }
+
+    @Test
     public void addingGroupMembersSendsUsersAsAnArray() {
         // users is a LIST server-side. A bare string would be iterated as
         // characters or rejected outright.
         OtsRequest r = OtsRequest.addGroupMembers(
                 Arrays.asList("alice", "bob"), "Bravo", "IN");
-        assertEquals(OtsRequest.Method.POST, r.method);
-        assertEquals(BASE + "/api/groups/members", r.url(BASE));
+        // Shipped wrong in 0.1.0 as POST /api/groups/members, a route
+        // that does not exist - that sub-resource has only GET and DELETE.
+        assertEquals(OtsRequest.Method.PUT, r.method);
+        assertEquals(BASE + "/api/groups", r.url(BASE));
         assertEquals("{\"users\":[\"alice\",\"bob\"],"
                 + "\"group_name\":\"Bravo\",\"direction\":\"IN\"}", r.body);
     }

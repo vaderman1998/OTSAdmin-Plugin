@@ -34,7 +34,7 @@ import java.util.Map;
 public final class OtsRequest {
 
     public enum Method {
-        GET, POST, PATCH, DELETE
+        GET, POST, PUT, PATCH, DELETE
     }
 
     public final Method method;
@@ -270,7 +270,18 @@ public final class OtsRequest {
     }
 
     /**
-     * Add users to a group. JSON body, and {@code users} is a <b>list</b>.
+     * Add users to a group.
+     *
+     * <b>This is {@code PUT /api/groups}, not a POST on the members
+     * sub-resource.</b> There is no POST route on
+     * {@code /api/groups/members} at all — only GET and DELETE — so the
+     * obvious guess returns 405, which reads like the group name was wrong.
+     * The handler is {@code add_user_to_group} and it sits on the
+     * collection: {@code /api/groups} carries POST to create, PUT to add a
+     * member and DELETE to remove the group, with the members sub-resource
+     * used only for reading and removing.
+     *
+     * JSON body, and {@code users} is a <b>list</b>.
      *
      * @param direction {@code "IN"} or {@code "OUT"} — the server accepts
      *                  nothing else, not even "BOTH"
@@ -282,7 +293,7 @@ public final class OtsRequest {
                 usernames == null ? new ArrayList<String>() : usernames));
         parts.add(OtsJson.pair("group_name", groupName));
         parts.add(OtsJson.pair("direction", direction));
-        return new OtsRequest(Method.POST, "/api/groups/members",
+        return new OtsRequest(Method.PUT, "/api/groups",
                 new LinkedHashMap<String, String>(), OtsJson.of(parts));
     }
 
