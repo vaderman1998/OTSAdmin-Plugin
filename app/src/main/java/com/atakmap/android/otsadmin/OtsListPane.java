@@ -223,13 +223,8 @@ public class OtsListPane {
                 if (groupOpener != null)
                     groupOpener.open(name, desc);
             });
-        } else if (which.writable && session.isAdmin()
-                && !session.isLdap()) {
-            Button del = new Button(pluginContext);
-            del.setText("Delete");
-            del.setTextSize(10);
-            del.setOnClickListener(v -> confirmDeleteUser(name));
-            head.addView(del);
+        } else if (which.writable && canChange(which)) {
+            addRowActions(head, which, row, name);
         }
         box.addView(head);
 
@@ -253,6 +248,213 @@ public class OtsListPane {
             box.addView(sub);
         }
         return box;
+    }
+
+    /**
+     * The buttons a row gets, by section.
+     *
+     * Users get one "Manage" button rather than five, because five on a row
+     * leaves no width for the name. Everything else has few enough actions
+     * to show them directly.
+     */
+    private void addRowActions(LinearLayout head, OtsSection which,
+            JSONObject row, String name) {
+        if (which == OtsSection.USERS) {
+            head.addView(smallButton("Manage",
+                    () -> promptManageUser(row, name)));
+        } else if (which == OtsSection.SCHEDULER) {
+            // A paused job reports no next run time, which is how the
+            // buttons know which way round to offer themselves.
+            boolean paused = readable(row, "next_run_time").isEmpty();
+            head.addView(smallButton("Run now",
+                    () -> write(OtsRequest.runJob(name),
+                            "Started " + name)));
+            head.addView(smallButton(paused ? "Resume" : "Pause",
+                    () -> write(paused ? OtsRequest.resumeJob(name)
+                            : OtsRequest.pauseJob(name),
+                            (paused ? "Resumed " : "Paused ") + name)));
+        } else if (which == OtsSection.PLUGINS) {
+            boolean enabled = row.optBoolean("enabled", false);
+            head.addView(smallButton(enabled ? "Disable" : "Enable",
+                    () -> confirmPlugin(name, enabled)));
+        } else if (which == OtsSection.DATA_PACKAGES) {
+            final String hash = readable(row, "hash");
+            head.addView(smallButton("Delete",
+                    () -> confirmSimpleDelete("data package " + name,
+                            OtsRequest.deleteDataPackage(hash),
+                            hash.isEmpty()
+                                    ? "This package has no hash, which is"
+                                            + " what a delete is keyed on."
+                                    : null)));
+        } else if (which == OtsSection.PROFILES) {
+            final String uid = readable(row, "eud_uid");
+            final String key = readable(row, "preference_key");
+            head.addView(smallButton("Delete",
+                    () -> confirmSimpleDelete("preference " + key,
+                            OtsRequest.deleteDeviceProfile(uid, key),
+                            key.isEmpty()
+                                    ? "This row has no preference key,"
+                                            + " which a delete needs."
+                                    : null)));
+        }
+    }
+
+    private Button smallButton(String label, Runnable onClick) {
+        Button b = new Button(pluginContext);
+        b.setText(label);
+        b.setTextSize(10);
+        b.setOnClickListener(v -> onClick.run());
+        return b;
+    }
+
+    /** Everything that can be done to one account, in one list. */
+    private void promptManageUser(final JSONObject row,
+            final String username) {
+        boolean active = row.optBoolean("active", true);
+        final String[] labels = {
+                "Reset password",
+                active ? "Deactivate" : "Activate",
+                "Change roles",
+                "Delete user" };
+        new AlertDialog.Builder(MapView.getMapView().getContext())
+                .setTitle(username)
+                .setItems(labels, (d, which) -> {
+                    switch (which) {
+                        case 0:
+                            promptResetPassword(username);
+                            break;
+                        case 1:
+                            toggleActive(username, active);
+                            break;
+                        case 2:
+                            promptRoles(row, username);
+                            break;
+                        default:
+                            confirmDeleteUser(username);
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void promptResetPassword(final String username) {
+        final EditText pass = field("New password", true);
+        final EditText confirm = field("Confirm", true);
+        TextView note = new TextView(pluginContext);
+        note.setText("At least " + OtsWriteGuard.MIN_PASSWORD_LENGTH
+                + " characters, and the server rejects a colon or an"
+                + " at-sign.");
+        note.setTextSize(10);
+        note.setTextColor(0xFF78909C);
+        new AlertDialog.Builder(MapView.getMapView().getContext())
+                .setTitle("Reset " + username + "'s password")
+                .setView(column(pass, confirm, note))
+                .setPositiveButton("Reset", (d, w) -> {
+                    String blocked = OtsWriteGuard.blockResetPassword(
+                            username, pass.getText().toString(),
+                            confirm.getText().toString(),
+                            session.isLdap());
+                    if (blocked != null) {
+                        say(blocked);
+                        return;
+                    }
+                    write(OtsRequest.resetPassword(username,
+                            pass.getText().toString()),
+                            "Reset the password for " + username);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void toggleActive(final String username, boolean active) {
+        if (!active) {
+            write(OtsRequest.activateUser(username),
+                    "Activated " + username);
+            return;
+        }
+        String blocked = OtsWriteGuard.blockDeactivate(username,
+                session.username(), session.isLdap());
+        if (blocked != null) {
+            say(blocked);
+            return;
+        }
+        new AlertDialog.Builder(MapView.getMapView().getContext())
+                .setTitle("Deactivate " + username + "?")
+                .setMessage("The account stops working immediately and its"
+                        + " devices lose access. It is not deleted, and this"
+                        + " can be undone.")
+                .setPositiveButton("Deactivate", (d, w) -> write(
+                        OtsRequest.deactivateUser(username),
+                        "Deactivated " + username))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    /**
+     * Roles REPLACE rather than add, so the current set is pre-ticked.
+     *
+     * Without that, opening this and pressing Save would quietly strip every
+     * role the account already had.
+     */
+    private void promptRoles(final JSONObject row, final String username) {
+        final String[] choices = { OtsWriteGuard.ROLE_USER,
+                OtsWriteGuard.ROLE_ADMIN };
+        String current = readable(row, "roles");
+        final boolean[] picked = new boolean[choices.length];
+        for (int i = 0; i < choices.length; i++)
+            picked[i] = current.contains(choices[i]);
+        new AlertDialog.Builder(MapView.getMapView().getContext())
+                .setTitle(username + "'s roles")
+                .setMultiChoiceItems(choices, picked,
+                        (d, which, isChecked) -> picked[which] = isChecked)
+                .setPositiveButton("Save", (d, w) -> {
+                    List<String> roles = new ArrayList<>();
+                    for (int i = 0; i < choices.length; i++)
+                        if (picked[i])
+                            roles.add(choices[i]);
+                    String blocked = OtsWriteGuard.blockSetRoles(username,
+                            roles, session.isAdmin(), session.isLdap());
+                    if (blocked != null) {
+                        say(blocked);
+                        return;
+                    }
+                    write(OtsRequest.setUserRoles(username, roles),
+                            "Set " + username + " to " + roles);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void confirmPlugin(final String name, final boolean enabled) {
+        new AlertDialog.Builder(MapView.getMapView().getContext())
+                .setTitle((enabled ? "Disable " : "Enable ") + name + "?")
+                .setMessage("This is a plugin on the SERVER, not on this"
+                        + " device. It may need an OpenTAKServer restart to"
+                        + " take effect.")
+                .setPositiveButton(enabled ? "Disable" : "Enable",
+                        (d, w) -> write(enabled
+                                ? OtsRequest.disableServerPlugin(name)
+                                : OtsRequest.enableServerPlugin(name),
+                                (enabled ? "Disabled " : "Enabled ")
+                                        + name))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    /** A delete with nothing to fill in, and a reason it cannot run. */
+    private void confirmSimpleDelete(final String what,
+            final OtsRequest request, final String impossible) {
+        if (impossible != null) {
+            say(impossible);
+            return;
+        }
+        new AlertDialog.Builder(MapView.getMapView().getContext())
+                .setTitle("Delete " + what + "?")
+                .setMessage("This cannot be undone from here.")
+                .setPositiveButton("Delete", (d, w) -> write(request,
+                        "Deleted " + what))
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     /** Tolerates the server's two spellings of a group's name. */
@@ -304,11 +506,29 @@ public class OtsListPane {
     // Writes
     // ------------------------------------------------------------------
 
+    /**
+     * Whether this plugin may change this section.
+     *
+     * Gated on the administrator role only where the SERVER gates it.
+     * Scheduler jobs and data packages are auth_required and nothing more,
+     * so demanding admin for them would withhold something the server would
+     * happily allow. LDAP only owns accounts and group membership, so it
+     * does not block the rest either.
+     */
+    private boolean canChange(OtsSection which) {
+        if (session == null || !session.isReady())
+            return false;
+        if (which.needsAdmin() && !session.isAdmin())
+            return false;
+        boolean accountish = which == OtsSection.USERS
+                || which == OtsSection.GROUPS;
+        return !accountish
+                || (session.isAdmin() && !session.isLdap());
+    }
+
     private void buildActionBar() {
         actionsBar.removeAllViews();
-        boolean canWrite = section.writable && session != null
-                && session.isReady() && session.isAdmin()
-                && !session.isLdap();
+        boolean canWrite = section.writable && canChange(section);
         if (!canWrite) {
             actionsBar.setVisibility(View.GONE);
             return;

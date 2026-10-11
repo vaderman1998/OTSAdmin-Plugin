@@ -99,7 +99,7 @@ public enum OtsSection {
         }
     },
 
-    DATA_PACKAGES("Data packages", false) {
+    DATA_PACKAGES("Data packages", true) {
         @Override
         public OtsRequest request(int page) {
             return OtsRequest.dataPackages(page, PER_PAGE);
@@ -135,7 +135,7 @@ public enum OtsSection {
         }
     },
 
-    PROFILES("Device profiles", false) {
+    PROFILES("Device profiles", true) {
         @Override
         public OtsRequest request(int page) {
             return OtsRequest.deviceProfiles(page, PER_PAGE);
@@ -143,13 +143,15 @@ public enum OtsSection {
 
         @Override
         public String[] fields() {
-            return new String[] { "name", "active", "enrollment",
-                    "connection", "tool" };
+            // eud_uid and preference_key are what a delete is keyed
+            // on, so they have to be visible to be actionable.
+            return new String[] { "preference_key", "eud_uid", "value",
+                    "active", "enrollment", "connection", "tool" };
         }
 
         @Override
         public String titleField() {
-            return "name";
+            return "preference_key";
         }
     },
 
@@ -172,7 +174,7 @@ public enum OtsSection {
     },
 
     /** Not paginated; returns whatever the scheduler is running. */
-    SCHEDULER("Scheduled jobs", false) {
+    SCHEDULER("Scheduled jobs", true) {
         @Override
         public OtsRequest request(int page) {
             return OtsRequest.schedulerJobs();
@@ -190,7 +192,7 @@ public enum OtsSection {
     },
 
     /** Not paginated. Administrator only server-side. */
-    PLUGINS("Server plugins", false) {
+    PLUGINS("Server plugins", true) {
         @Override
         public OtsRequest request(int page) {
             return OtsRequest.plugins();

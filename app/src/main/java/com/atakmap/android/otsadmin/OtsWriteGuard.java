@@ -90,6 +90,80 @@ public final class OtsWriteGuard {
         return null;
     }
 
+    /**
+     * The server's minimum password length, from its default config.
+     *
+     * Mirrored rather than discovered because there is no endpoint that
+     * reports it, and a rejection after typing a password twice is a poor
+     * way to find out. If a server raises it, its own refusal still wins.
+     */
+    public static final int MIN_PASSWORD_LENGTH = 8;
+
+    /**
+     * Why a password reset will not be attempted, or null.
+     *
+     * The colon and at-sign rule is the server's and it is genuinely
+     * surprising \u2014 a password manager will suggest one containing either
+     * without hesitation, so catching it here saves a round trip and an
+     * unexplained failure.
+     */
+    public static String blockResetPassword(String username,
+            String newPassword, String confirmPassword,
+            boolean ldapEnabled) {
+        if (ldapEnabled)
+            return "LDAP is handling accounts on this server, so passwords"
+                    + " cannot be reset here.";
+        if (isBlank(username))
+            return "No user chosen.";
+        if (newPassword == null || newPassword.isEmpty())
+            return "A new password is needed.";
+        if (!newPassword.equals(confirmPassword))
+            return "The two passwords do not match.";
+        if (newPassword.length() < MIN_PASSWORD_LENGTH)
+            return "The server wants at least " + MIN_PASSWORD_LENGTH
+                    + " characters.";
+        if (newPassword.contains(":") || newPassword.contains("@"))
+            return "The server rejects passwords containing a colon or an"
+                    + " at-sign.";
+        return null;
+    }
+
+    /** Replacing roles with nothing would leave an account with none. */
+    public static String blockSetRoles(String username, List<String> roles,
+            boolean callerIsAdmin, boolean ldapEnabled) {
+        if (ldapEnabled)
+            return "LDAP is handling roles on this server.";
+        if (isBlank(username))
+            return "No user chosen.";
+        if (roles == null || roles.isEmpty())
+            return "Pick at least one role. Sending none would leave the"
+                    + " account with no role at all.";
+        if (roles.contains(ROLE_ADMIN) && !callerIsAdmin)
+            return "Only an administrator can grant the administrator role.";
+        return null;
+    }
+
+    /**
+     * Deactivating your own account locks this plugin out.
+     *
+     * The server does not stop you \u2014 unlike deleting your own account,
+     * which it refuses outright \u2014 so this is the one rule here that is ours
+     * rather than a mirror. It is still worth having: the next request would
+     * fail and the reason would not be obvious.
+     */
+    public static String blockDeactivate(String username,
+            String loggedInAs, boolean ldapEnabled) {
+        if (ldapEnabled)
+            return "LDAP is handling accounts on this server.";
+        if (isBlank(username))
+            return "No user chosen.";
+        if (loggedInAs != null
+                && username.trim().equalsIgnoreCase(loggedInAs.trim()))
+            return "This is the account OTS Admin is logged in as."
+                    + " Deactivating it would lock you out.";
+        return null;
+    }
+
     public static String blockAddGroup(String name) {
         if (isBlank(name))
             return "A group name is needed.";

@@ -117,7 +117,11 @@ public final class OtsJson {
         if (body == null)
             return null;
         String out = body;
-        for (String key : new String[] { "password", "confirm_password" })
+        // new_password was missing here until a test caught it: an
+        // administrator resetting somebody else's password would have had
+        // the new one written to logcat.
+        for (String key : new String[] { "password", "confirm_password",
+                "new_password" })
             out = out.replaceAll(quote(key) + "\\s*:\\s*\"(\\\\.|[^\"\\\\])*\"",
                     quote(key) + ":\"***\"");
         return out;

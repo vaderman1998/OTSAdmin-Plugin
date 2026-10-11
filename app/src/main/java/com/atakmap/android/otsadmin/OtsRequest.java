@@ -249,6 +249,153 @@ public final class OtsRequest {
                 OtsJson.object("username", username));
     }
 
+    /**
+     * Reset somebody's password as an administrator.
+     *
+     * The server's rules, mirrored in {@link OtsWriteGuard}: at least
+     * {@code SECURITY_PASSWORD_LENGTH_MIN} characters (8 by default) and
+     * <b>no colon or at-sign</b>. That last one is unusual enough to be
+     * worth catching locally, because a password manager will happily
+     * suggest one containing either.
+     */
+    public static OtsRequest resetPassword(String username,
+            String newPassword) {
+        return new OtsRequest(Method.POST, "/api/user/password/reset",
+                new LinkedHashMap<String, String>(),
+                OtsJson.object("username", username,
+                        "new_password", newPassword));
+    }
+
+    /**
+     * Turn an account off without deleting it.
+     *
+     * The gentler answer for a lost device than deleting the account: it
+     * stops working immediately and can be turned back on. The server
+     * refuses if it is already deactivated, which is worth surfacing rather
+     * than treating as a failure.
+     */
+    public static OtsRequest deactivateUser(String username) {
+        return new OtsRequest(Method.POST, "/api/user/deactivate",
+                new LinkedHashMap<String, String>(),
+                OtsJson.object("username", username));
+    }
+
+    public static OtsRequest activateUser(String username) {
+        return new OtsRequest(Method.POST, "/api/user/activate",
+                new LinkedHashMap<String, String>(),
+                OtsJson.object("username", username));
+    }
+
+    /**
+     * Replace an account's roles. JSON body, {@code roles} is a list.
+     *
+     * This REPLACES rather than adds, so sending one role removes the
+     * others \u2014 the dialog shows the current set pre-selected for that
+     * reason.
+     */
+    public static OtsRequest setUserRoles(String username,
+            List<String> roles) {
+        List<String> parts = new ArrayList<>();
+        parts.add(OtsJson.pair("username", username));
+        parts.add(OtsJson.arrayPair("roles",
+                roles == null ? new ArrayList<String>() : roles));
+        return new OtsRequest(Method.POST, "/api/user/role",
+                new LinkedHashMap<String, String>(), OtsJson.of(parts));
+    }
+
+    /**
+     * Set which groups a user belongs to, from the user's side.
+     *
+     * {@code PUT /api/users/groups} \u2014 note the plural {@code users}, unlike
+     * every other user endpoint, and that this is the mirror of
+     * {@link #addGroupMembers}: same relationship, approached from the other
+     * end, and it takes a list of GROUPS for one user rather than a list of
+     * users for one group.
+     */
+    public static OtsRequest setUserGroups(String username,
+            List<String> groups, String direction) {
+        List<String> parts = new ArrayList<>();
+        parts.add(OtsJson.pair("username", username));
+        parts.add(OtsJson.arrayPair("groups",
+                groups == null ? new ArrayList<String>() : groups));
+        parts.add(OtsJson.pair("direction", direction));
+        return new OtsRequest(Method.PUT, "/api/users/groups",
+                new LinkedHashMap<String, String>(), OtsJson.of(parts));
+    }
+
+    /** Attach an EUD to an account. */
+    public static OtsRequest assignEud(String username, String uid) {
+        return new OtsRequest(Method.POST, "/api/user/assign_eud",
+                new LinkedHashMap<String, String>(),
+                OtsJson.object("username", username, "uid", uid));
+    }
+
+    // --- Scheduler. All three take job_id in a JSON body.
+
+    public static OtsRequest pauseJob(String jobId) {
+        return job("pause", jobId);
+    }
+
+    public static OtsRequest resumeJob(String jobId) {
+        return job("resume", jobId);
+    }
+
+    /** Run a job now, outside its schedule. */
+    public static OtsRequest runJob(String jobId) {
+        return job("run", jobId);
+    }
+
+    private static OtsRequest job(String action, String jobId) {
+        return new OtsRequest(Method.POST,
+                "/api/scheduler/job/" + action,
+                new LinkedHashMap<String, String>(),
+                OtsJson.object("job_id", jobId));
+    }
+
+    // --- Server plugins. The name is in the PATH, and there is no body.
+
+    public static OtsRequest enableServerPlugin(String name) {
+        return serverPlugin(name, "enable");
+    }
+
+    public static OtsRequest disableServerPlugin(String name) {
+        return serverPlugin(name, "disable");
+    }
+
+    /**
+     * The plugin name goes in the path, so it must be path-escaped rather
+     * than left raw \u2014 a name with a slash in it would otherwise point at a
+     * different route entirely.
+     */
+    private static OtsRequest serverPlugin(String name, String action) {
+        String safe = name == null ? "" : name.trim().replace("/", "%2F");
+        return new OtsRequest(Method.POST,
+                "/api/plugins/" + safe + "/" + action,
+                new LinkedHashMap<String, String>(), null);
+    }
+
+    /** Delete a data package by its hash. QUERY PARAMETER. */
+    public static OtsRequest deleteDataPackage(String hash) {
+        Map<String, String> q = new LinkedHashMap<>();
+        q.put("hash", hash == null ? "" : hash);
+        return new OtsRequest(Method.DELETE, "/api/data_packages", q, null);
+    }
+
+    /**
+     * Delete one device-profile preference. QUERY PARAMETERS.
+     *
+     * Keyed on the pair, not on a single id: a profile is a set of
+     * preferences and this removes one of them for one EUD.
+     */
+    public static OtsRequest deleteDeviceProfile(String eudUid,
+            String preferenceKey) {
+        Map<String, String> q = new LinkedHashMap<>();
+        q.put("eud_uid", eudUid == null ? "" : eudUid);
+        q.put("preference_key",
+                preferenceKey == null ? "" : preferenceKey);
+        return new OtsRequest(Method.DELETE, "/api/profiles", q, null);
+    }
+
     /** Create a group. JSON body, field is {@code name}. */
     public static OtsRequest addGroup(String name, String description) {
         List<String> parts = new ArrayList<>();
