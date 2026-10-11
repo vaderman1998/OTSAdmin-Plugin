@@ -11,10 +11,20 @@ remove users and groups, and read everything else the server's admin page shows.
 
 ---
 
-## Before it will connect
+## Setting it up
 
-**OpenTAKServer must be configured for token authentication.** Add `session` and `basic` to
-`SECURITY_CSRF_PROTECT_MECHANISMS` in `~/ots/config.yml` and restart the service:
+**Use the same username and password you log into the web UI with.** There is no separate API
+account, no API key, and nothing to generate. The plugin posts to `/api/login` — the same endpoint
+the web UI's login form uses — and the only difference is the `include_auth_token` parameter, which
+asks the server to hand back an API token alongside the session cookie. The web UI does not need one
+because it keeps the cookie; the plugin uses the token header instead.
+
+Set the server URL, username and password in **Settings → Tools → OTS Admin**, then press
+**Connect**.
+
+### Token authentication is already on by default
+
+The OpenTAKServer docs describe adding this to `~/ots/config.yml`:
 
 ```yaml
 SECURITY_CSRF_PROTECT_MECHANISMS:
@@ -22,10 +32,15 @@ SECURITY_CSRF_PROTECT_MECHANISMS:
   - basic
 ```
 
-Without it the login succeeds and the server returns no API token, which the plugin reports as
-exactly that rather than as a bad password.
+**On current OpenTAKServer that is already the default** — `defaultconfig.py` sets exactly those two
+values, alongside `WTF_CSRF_CHECK_DEFAULT = False` and
+`SECURITY_CSRF_IGNORE_UNAUTH_ENDPOINTS = True`. So there is normally nothing to change. The
+documentation appears to predate the default.
 
-Then set the server URL, username and password in **Settings → Tools → OTS Admin**.
+It is still worth knowing about, for two cases: an older server, or a `config.yml` that overrides the
+setting (config.yml is merged over the defaults). In either, the login succeeds and the server
+returns **no API token**. The plugin detects that specific case and says so, rather than reporting it
+as a bad password — which is what it looks like otherwise.
 
 ---
 
