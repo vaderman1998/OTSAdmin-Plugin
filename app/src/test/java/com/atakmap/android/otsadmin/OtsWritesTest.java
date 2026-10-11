@@ -88,25 +88,6 @@ public class OtsWritesTest {
     }
 
     // ------------------------------------------------------------------
-    // Certificates
-    // ------------------------------------------------------------------
-
-    @Test
-    public void issuingACertificateNeedsAUsernameAndMayCarryAUid() {
-        OtsRequest r = OtsRequest.issueCertificate("alice", null);
-        assertEquals(OtsRequest.Method.POST, r.method);
-        assertEquals(BASE + "/api/certificate", r.url(BASE));
-        // No uid: the certificate is for the user, not tied to a device.
-        assertEquals("{\"username\":\"alice\"}", r.body);
-        assertEquals("{\"username\":\"alice\","
-                + "\"uid\":\"ANDROID-abc\"}",
-                OtsRequest.issueCertificate("alice", "ANDROID-abc").body);
-        // Blank is the same as absent, not an empty uid.
-        assertEquals("{\"username\":\"alice\"}",
-                OtsRequest.issueCertificate("alice", "   ").body);
-    }
-
-    // ------------------------------------------------------------------
     // Scheduler
     // ------------------------------------------------------------------
 

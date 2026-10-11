@@ -202,6 +202,8 @@ public class OtsGroupPane {
             Button remove = new Button(pluginContext);
             remove.setText("Remove");
             remove.setTextSize(10);
+            remove.setAllCaps(false);
+            remove.setPadding(14, 2, 14, 2);
             remove.setOnClickListener(
                     v -> confirmRemove(username, direction));
             box.addView(remove);
@@ -233,7 +235,9 @@ public class OtsGroupPane {
         Button b = new Button(pluginContext);
         b.setText(label);
         b.setTextSize(11);
-        b.setOnClickListener(v -> onClick.run());
+        b.setAllCaps(false);
+        if (onClick != null)
+            b.setOnClickListener(v -> onClick.run());
         return b;
     }
 

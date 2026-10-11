@@ -236,9 +236,11 @@ public class OtsListPane {
             if (value.isEmpty())
                 continue;
             if (detail.length() > 0)
-                detail.append("   ·   ");
-            detail.append(field.replace('_', ' ')).append(": ")
-                    .append(value);
+                detail.append("  ·  ");
+            String label = OtsSection.labelFor(field);
+            if (!label.isEmpty())
+                detail.append(label).append(' ');
+            detail.append(value);
         }
         if (detail.length() > 0) {
             TextView sub = new TextView(pluginContext);
@@ -299,10 +301,21 @@ public class OtsListPane {
         }
     }
 
+    /**
+     * A row button: small, lower case, and no wider than its text.
+     *
+     * The default Android button in a plugin context is chunky and
+     * upper-cases its label, which on a row leaves little width for the
+     * thing the row is about.
+     */
     private Button smallButton(String label, Runnable onClick) {
         Button b = new Button(pluginContext);
         b.setText(label);
         b.setTextSize(10);
+        b.setAllCaps(false);
+        b.setPadding(14, 2, 14, 2);
+        b.setMinWidth(0);
+        b.setMinimumWidth(0);
         b.setOnClickListener(v -> onClick.run());
         return b;
     }
@@ -547,6 +560,7 @@ public class OtsListPane {
         Button b = new Button(pluginContext);
         b.setText(label);
         b.setTextSize(11);
+        b.setAllCaps(false);
         b.setOnClickListener(v -> onClick.run());
         return b;
     }

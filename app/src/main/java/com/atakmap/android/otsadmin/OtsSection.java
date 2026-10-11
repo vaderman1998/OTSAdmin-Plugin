@@ -236,6 +236,51 @@ public enum OtsSection {
     public abstract String titleField();
 
     /**
+     * A short label for a field, or "" when the value speaks for itself.
+     *
+     * The raw column names read badly on a row: "last event time:" and
+     * "submission user:" are most of the width before the value starts, and
+     * a direction or a role needs no label at all. Kept here rather than in
+     * the pane so the wording sits next to the field list it describes.
+     */
+    public static String labelFor(String field) {
+        switch (field) {
+            // Self-evident from the value.
+            case "roles":
+            case "direction":
+            case "team":
+            case "platform":
+            case "protocol":
+            case "trigger":
+            case "value":
+                return "";
+            // Worth a word, but a shorter one.
+            case "last_event_time":
+                return "seen";
+            case "last_login_at":
+                return "last login";
+            case "submission_time":
+                return "uploaded";
+            case "submission_user":
+                return "by";
+            case "next_run_time":
+                return "next";
+            case "expiration_date":
+                return "expires";
+            case "create_time":
+                return "created";
+            case "preference_key":
+                return "key";
+            case "eud_uid":
+                return "uid";
+            case "rtsp_link":
+                return "rtsp";
+            default:
+                return field.replace('_', ' ');
+        }
+    }
+
+    /**
      * Whether this section needs the administrator role at all.
      *
      * Groups, profiles and the server's plugin list are administrator-only

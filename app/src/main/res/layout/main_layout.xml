@@ -38,6 +38,7 @@
             android:layout_weight="1"
             android:layout_height="wrap_content"
             android:text="Connect"
+            android:textAllCaps="false"
             android:textSize="12sp" />
 
         <Button
@@ -46,6 +47,7 @@
             android:layout_weight="1"
             android:layout_height="wrap_content"
             android:text="Server"
+            android:textAllCaps="false"
             android:textSize="12sp" />
     </LinearLayout>
 
@@ -57,7 +59,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Open a section &#8212; long-press the status line for server actions"
+        android:text="Sections &#8212; a dot marks one this plugin can change"
         android:textColor="#FF90A4AE"
         android:textSize="11sp"
         android:paddingTop="8dp"

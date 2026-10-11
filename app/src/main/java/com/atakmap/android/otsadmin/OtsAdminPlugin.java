@@ -162,15 +162,6 @@ public class OtsAdminPlugin implements IPlugin {
             sectionsBar = root.findViewById(R.id.ots_sections);
             connectButton = root.findViewById(R.id.ots_connect);
             connectButton.setOnClickListener(v -> connect());
-            // Server actions hide behind a LONG PRESS on the status line.
-            // Not security - anyone holding the phone can find it - but
-            // these generate key material on the server, and that should
-            // not share a row with Refresh where a thumb can find it by
-            // accident.
-            statusView.setOnLongClickListener(v -> {
-                promptServerActions();
-                return true;
-            });
             root.findViewById(R.id.ots_settings)
                     .setOnClickListener(v -> promptServerSettings());
             buildSectionList();
@@ -214,11 +205,13 @@ public class OtsAdminPlugin implements IPlugin {
         sectionsBar.removeAllViews();
         for (final OtsSection s : OtsSection.values()) {
             Button b = new Button(pluginContext);
-            // Marked, so it is clear before tapping which sections this
-            // plugin can change and which it only reads.
-            b.setText(s.writable ? s.label + "  (editable)" : s.label);
+            // A trailing dot marks what can be changed. "(editable)"
+            // on seven of ten rows was more noise than information; the
+            // legend under the list says what the dot means.
+            b.setText(s.writable ? s.label + "  ·" : s.label);
             b.setTextSize(13);
             b.setAllCaps(false);
+            b.setPadding(16, 6, 16, 6);
             b.setOnClickListener(v -> openSection(s));
             sectionsBar.addView(b, new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -331,122 +324,9 @@ public class OtsAdminPlugin implements IPlugin {
                 .show();
     }
 
-    /**
-     * The operations that do something on the server rather than edit a
-     * record.
-     *
-     * <h3>The list is short, and that is the API's doing</h3>
-     * OpenTAKServer exposes <b>no shell, no service restart, no config
-     * editing and no listener control</b>. The {@code /api/tcp/start} and
-     * {@code /api/ssl/*} endpoints its documentation mentions are gone from
-     * the current source \u2014 the EUD handlers are separate processes now.
-     * Installing a server plugin is a multipart upload of a wheel, which is
-     * not a phone operation.
-     *
-     * So what is left is certificate issuance, which is the one that
-     * matters anyway: it generates key material and builds an enrolment
-     * package, for somebody standing in front of you with a device that is
-     * not on the net yet.
-     *
-     * <b>Arbitrary commands are not possible and should not be.</b> The only
-     * route would be SSH from here, which would mean shell credentials on a
-     * device whose preferences are not encrypted.
-     */
-    private void promptServerActions() {
-        if (session == null || !session.isReady()) {
-            say("Connect to the server first.");
-            return;
-        }
-        new AlertDialog.Builder(MapView.getMapView().getContext())
-                .setTitle("Server actions")
-                .setItems(new String[] { "Issue a certificate" },
-                        (d, which) -> promptIssueCertificate())
-                .setNegativeButton("Close", null)
-                .show();
-    }
 
-    private void promptIssueCertificate() {
-        final EditText user = field("Username the certificate is for",
-                false);
-        final EditText uid = field("Device UID (optional)", false);
-        TextView note = new TextView(pluginContext);
-        note.setText("The server generates key material and builds an"
-                + " enrolment data package. Leave the UID blank for a"
-                + " certificate that is not tied to one device.");
-        note.setTextSize(10);
-        note.setTextColor(0xFF78909C);
-        note.setPadding(0, 10, 0, 0);
-        new AlertDialog.Builder(MapView.getMapView().getContext())
-                .setTitle("Issue a certificate")
-                .setView(column(user, uid, note))
-                .setPositiveButton("Issue", (d, w) -> {
-                    final String username =
-                            user.getText().toString().trim();
-                    if (username.isEmpty()) {
-                        say("A username is needed.");
-                        return;
-                    }
-                    confirmByTyping("Issue for " + username + "?",
-                            "This generates key material on the server."
-                                    + " Type the server host to confirm:",
-                            session.client().hostLabel(),
-                            () -> sendServerAction(
-                                    OtsRequest.issueCertificate(username,
-                                            uid.getText().toString()),
-                                    "Issued a certificate for "
-                                            + username));
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
 
-    /**
-     * A confirmation that cannot be dismissed by reflex.
-     *
-     * Typing the host is deliberate friction, and it also makes you read
-     * WHICH server you are about to change - the plugin can be pointed at a
-     * different one in two taps, and "I was on the other server" is the
-     * mistake this prevents.
-     */
-    private void confirmByTyping(String title, String message,
-            final String expected, final Runnable onConfirm) {
-        final EditText typed = field(expected, false);
-        TextView msg = new TextView(pluginContext);
-        msg.setText(message);
-        msg.setTextSize(12);
-        msg.setTextColor(0xFFB0BEC5);
-        msg.setPadding(0, 0, 0, 8);
-        new AlertDialog.Builder(MapView.getMapView().getContext())
-                .setTitle(title)
-                .setView(column(msg, typed))
-                .setPositiveButton("Confirm", (d, w) -> {
-                    if (!expected.equalsIgnoreCase(
-                            typed.getText().toString().trim())) {
-                        say("That is not " + expected + ". Nothing was"
-                                + " sent.");
-                        return;
-                    }
-                    onConfirm.run();
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
 
-    /** Send one server action and report the server's own answer. */
-    private void sendServerAction(final OtsRequest request,
-            final String successText) {
-        run(() -> {
-            final OtsClient.Result r = session.client().send(request);
-            ui.post(() -> {
-                String failure = r.failure();
-                if (failure == null && OtsResponse.succeeded(r.body))
-                    say(successText);
-                else
-                    say(failure != null ? failure
-                            : "the server did not confirm it");
-            });
-        });
-    }
 
     private void registerPreferences() {
         if (Looper.myLooper() != Looper.getMainLooper())
