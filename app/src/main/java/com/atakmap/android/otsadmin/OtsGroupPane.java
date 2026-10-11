@@ -6,8 +6,10 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import com.atak.plugins.impl.PluginLayoutInflater;
@@ -17,8 +19,9 @@ import com.atakmap.coremap.log.Log;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -74,6 +77,20 @@ public class OtsGroupPane {
     private String groupName = "";
     private String description = "";
 
+    /**
+     * Every username on the server, for the picker.
+     *
+     * Fetched once per pane open from {@code /api/users/all}, which returns
+     * a bare array of full user objects. Heavier than it needs to be \u2014 each
+     * carries its EUDs, streams, roles and memberships \u2014 but it is the only
+     * endpoint that lists users without paging, and the alternative is
+     * typing names from memory.
+     */
+    private final List<String> allUsers = new ArrayList<>();
+
+    /** username -> the directions they already hold in THIS group. */
+    private final Map<String, String> memberDirections = new HashMap<>();
+
     public OtsGroupPane(Context pluginContext, IHostUIService uiService,
             OtsSession session, Runnable onBack) {
         this.pluginContext = pluginContext;
@@ -109,6 +126,43 @@ public class OtsGroupPane {
         if (!uiService.isPaneVisible(pane))
             uiService.showPane(pane, null);
         load();
+        fetchUsers();
+    }
+
+    /**
+     * The username list for the picker, fetched once and kept.
+     *
+     * Failure is not reported: the picker falls back to a text field, which
+     * is what the dialog did before it existed, so a server that will not
+     * list users costs convenience and not the feature.
+     */
+    private void fetchUsers() {
+        if (!allUsers.isEmpty() || session == null || !session.isReady())
+            return;
+        run(() -> {
+            final OtsClient.Result r = session.client()
+                    .send(OtsRequest.allUsers());
+            if (!r.ok())
+                return;
+            final List<String> found = new ArrayList<>();
+            try {
+                OtsResponse.Page page = OtsResponse.page(r.body);
+                for (JSONObject row : page.results) {
+                    String who = row.optString("username", "");
+                    if (!who.isEmpty() && !found.contains(who))
+                        found.add(who);
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "could not list users for the picker", e);
+                return;
+            }
+            java.util.Collections.sort(found,
+                    (a, b) -> a.compareToIgnoreCase(b));
+            ui.post(() -> {
+                allUsers.clear();
+                allUsers.addAll(found);
+            });
+        });
     }
 
     public void hide() {
@@ -160,7 +214,17 @@ public class OtsGroupPane {
                     : page.results.size() + (page.results.size() == 1
                             ? " member" : " members"));
             boolean alt = false;
+            memberDirections.clear();
             for (JSONObject row : page.results) {
+                // Kept so the picker can say who is already in, and in
+                // which direction - the same user can hold both.
+                String who = row.optString("username", "");
+                String dir = row.optString("direction", "");
+                if (!who.isEmpty()) {
+                    String had = memberDirections.get(who);
+                    memberDirections.put(who, had == null ? dir
+                            : had + "+" + dir);
+                }
                 rowsView.addView(memberRow(row, alt));
                 alt = !alt;
             }
@@ -241,25 +305,106 @@ public class OtsGroupPane {
         return b;
     }
 
-    /** The group is already known, so it is not asked for. */
+    /**
+     * The group is already known, so it is not asked for \u2014 and neither are
+     * the usernames, when the server would list them.
+     *
+     * A checklist rather than a text field: typing names from memory is how
+     * you get "User bob does not exist" for someone called "Bob". Users
+     * already in this group are marked with the direction they hold, because
+     * adding an existing member <b>silently succeeds and does nothing</b> \u2014
+     * the server catches the integrity error and still answers
+     * {@code success: true}, so without the mark it is an invisible no-op.
+     *
+     * Falls back to the text field if the user list could not be fetched.
+     */
     private void promptAddMembers() {
-        final EditText users = field("Usernames, comma separated");
-        final TextView dirLabel = new TextView(pluginContext);
-        dirLabel.setText("Direction");
-        dirLabel.setTextSize(11);
-        dirLabel.setTextColor(0xFF90A4AE);
-        dirLabel.setPadding(0, 12, 0, 0);
+        if (allUsers.isEmpty()) {
+            promptAddMembersByTyping();
+            return;
+        }
+        final List<CheckBox> boxes = new ArrayList<>();
+        LinearLayout list = new LinearLayout(pluginContext);
+        list.setOrientation(LinearLayout.VERTICAL);
+        for (String who : allUsers) {
+            CheckBox cb = new CheckBox(pluginContext);
+            String already = memberDirections.get(who);
+            cb.setText(already == null ? who
+                    : who + "   (already " + already + ")");
+            cb.setTag(who);
+            cb.setTextSize(14);
+            if (already != null)
+                cb.setTextColor(0xFF90A4AE);
+            boxes.add(cb);
+            list.addView(cb);
+        }
+        ScrollView scroll = new ScrollView(pluginContext);
+        scroll.addView(list);
+        // Bounded, or a server with eighty accounts pushes the direction
+        // buttons and the Add button off the bottom of the dialog.
+        scroll.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(220)));
 
-        // Buttons rather than a text field: the server takes IN or OUT and
-        // nothing else, so there is nothing to type.
-        //
-        // BOTH is offered even though the server has no such value, because
-        // it is reachable - groups_users is keyed on (user, group,
-        // DIRECTION), so a user can hold one IN row and one OUT row for the
-        // same group. Picking it sends two requests. The note below says so,
-        // because the consequence is visible: they then appear as two
-        // members and need two removals.
         final String[] chosen = { OtsWriteGuard.DIRECTION_IN };
+        LinearLayout dirRow = directionRow(chosen);
+
+        new AlertDialog.Builder(MapView.getMapView().getContext())
+                .setTitle("Add to " + groupName)
+                .setView(column(scroll, dirRow, directionNote()))
+                .setPositiveButton("Add", (d, w) -> {
+                    List<String> picked = new ArrayList<>();
+                    for (CheckBox cb : boxes)
+                        if (cb.isChecked())
+                            picked.add((String) cb.getTag());
+                    submitMembers(picked, chosen[0]);
+                })
+                .setNeutralButton("Type instead",
+                        (d, w) -> promptAddMembersByTyping())
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private int dp(int value) {
+        float density = pluginContext.getResources()
+                .getDisplayMetrics().density;
+        return Math.round(value * density);
+    }
+
+    /** The fallback, and what the dialog was before the picker existed. */
+    private void promptAddMembersByTyping() {
+        final EditText users = field("Usernames, comma separated");
+        final String[] chosen = { OtsWriteGuard.DIRECTION_IN };
+        new AlertDialog.Builder(MapView.getMapView().getContext())
+                .setTitle("Add to " + groupName)
+                .setView(column(users, directionLabel(),
+                        directionRow(chosen), directionNote()))
+                .setPositiveButton("Add", (d, w) -> submitMembers(
+                        splitList(users.getText().toString()), chosen[0]))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private TextView directionLabel() {
+        TextView t = new TextView(pluginContext);
+        t.setText("Direction");
+        t.setTextSize(11);
+        t.setTextColor(0xFF90A4AE);
+        t.setPadding(0, 12, 0, 0);
+        return t;
+    }
+
+    /**
+     * IN / OUT / BOTH, as buttons.
+     *
+     * Buttons rather than a text field: the server takes IN or OUT and
+     * nothing else, so there is nothing to type. BOTH is offered even though
+     * the server has no such value, because it is reachable \u2014 groups_users
+     * is keyed on (user, group, DIRECTION), so one user can hold an IN row
+     * and an OUT row for the same group. Picking it sends two requests.
+     *
+     * @param chosen a one-element holder the dialog reads on Add
+     */
+    private LinearLayout directionRow(final String[] chosen) {
         final Button in = button(OtsWriteGuard.DIRECTION_IN, null);
         final Button out = button(OtsWriteGuard.DIRECTION_OUT, null);
         final Button both = button(DIRECTION_BOTH, null);
@@ -275,52 +420,46 @@ public class OtsGroupPane {
             b.setOnClickListener(pick);
         out.setAlpha(0.45f);
         both.setAlpha(0.45f);
-        LinearLayout dirRow = new LinearLayout(pluginContext);
-        dirRow.setOrientation(LinearLayout.HORIZONTAL);
-        dirRow.addView(in);
-        dirRow.addView(out);
-        dirRow.addView(both);
+        LinearLayout row = new LinearLayout(pluginContext);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.addView(in);
+        row.addView(out);
+        row.addView(both);
+        return row;
+    }
 
-        final TextView dirNote = new TextView(pluginContext);
-        dirNote.setText("Both adds two memberships, so the user appears"
-                + " twice and needs removing twice. That is how the server"
-                + " stores it.");
-        dirNote.setTextSize(10);
-        dirNote.setTextColor(0xFF78909C);
-        dirNote.setPadding(0, 6, 0, 0);
+    private TextView directionNote() {
+        TextView t = new TextView(pluginContext);
+        t.setText("Both adds two memberships, so the user appears twice and"
+                + " needs removing twice. That is how the server stores"
+                + " it.");
+        t.setTextSize(10);
+        t.setTextColor(0xFF78909C);
+        t.setPadding(0, 6, 0, 0);
+        return t;
+    }
 
-        new AlertDialog.Builder(MapView.getMapView().getContext())
-                .setTitle("Add to " + groupName)
-                .setView(column(users, dirLabel, dirRow, dirNote))
-                .setPositiveButton("Add", (d, w) -> {
-                    List<String> list = splitList(
-                            users.getText().toString());
-                    boolean wantsBoth = DIRECTION_BOTH.equals(
-                            chosen[0]);
-                    // The guard checks what actually goes on the wire, so
-                    // BOTH is validated as IN - which is one of the two
-                    // requests it becomes.
-                    String checkDir = wantsBoth
-                            ? OtsWriteGuard.DIRECTION_IN : chosen[0];
-                    String blocked = OtsWriteGuard.blockGroupMembers(list,
-                            groupName, checkDir, session.isLdap());
-                    if (blocked != null) {
-                        say(blocked);
-                        return;
-                    }
-                    String what = list.size()
-                            + (list.size() == 1 ? " user" : " users")
-                            + " to " + groupName;
-                    if (wantsBoth)
-                        writeAll(OtsRequest.addGroupMembersBoth(list,
-                                groupName), "Added " + what
-                                + ", in both directions");
-                    else
-                        write(OtsRequest.addGroupMembers(list, groupName,
-                                chosen[0]), "Added " + what);
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+    /** Validate and send, from either dialog. */
+    private void submitMembers(List<String> list, String direction) {
+        boolean wantsBoth = DIRECTION_BOTH.equals(direction);
+        // The guard checks what actually goes on the wire, so BOTH is
+        // validated as IN, which is one of the two requests it becomes.
+        String checkDir = wantsBoth ? OtsWriteGuard.DIRECTION_IN
+                : direction;
+        String blocked = OtsWriteGuard.blockGroupMembers(list, groupName,
+                checkDir, session.isLdap());
+        if (blocked != null) {
+            say(blocked);
+            return;
+        }
+        String what = list.size() + (list.size() == 1 ? " user" : " users")
+                + " to " + groupName;
+        if (wantsBoth)
+            writeAll(OtsRequest.addGroupMembersBoth(list, groupName),
+                    "Added " + what + ", in both directions");
+        else
+            write(OtsRequest.addGroupMembers(list, groupName, direction),
+                    "Added " + what);
     }
 
     /** Uses the direction the server reported for that row. */
