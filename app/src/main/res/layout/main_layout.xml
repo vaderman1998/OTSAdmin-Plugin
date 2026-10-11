@@ -4,92 +4,94 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="#FF14171A"
-    android:padding="12dp">
+    android:padding="10dp">
 
+    <!-- Connection. First thing on the pane because nothing below it works
+         until this says Connected, and the reason it does not is the most
+         useful line on the screen. -->
     <TextView
+        android:id="@+id/ots_status"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Current status"
-        android:textColor="#FF90A4AE"
-        android:textSize="11sp" />
-
-    <TextView
-        android:id="@+id/sb_current"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingTop="2dp"
-        android:textSize="19sp"
-        android:textColor="#FFFFFFFF" />
-
-    <TextView
-        android:id="@+id/sb_hint"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingTop="4dp"
-        android:textSize="11sp"
-        android:textColor="#FF78909C" />
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginTop="12dp"
-        android:layout_marginBottom="12dp"
-        android:background="#FF2B3238" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Set"
-        android:textColor="#FF90A4AE"
-        android:textSize="11sp" />
-
-    <LinearLayout
-        android:id="@+id/sb_states"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:orientation="horizontal" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:text="For how long"
-        android:textColor="#FF90A4AE"
-        android:textSize="11sp" />
-
-    <LinearLayout
-        android:id="@+id/sb_durations"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:orientation="horizontal" />
-
-    <Button
-        android:id="@+id/sb_clear"
-        android:layout_width="match_parent"
-        android:layout_height="46dp"
-        android:layout_marginTop="16dp"
-        android:background="#FF37474F"
-        android:text="Clear - back to available"
+        android:text="Not configured"
+        android:textColor="#FFFFB74D"
         android:textSize="13sp"
-        android:textColor="#FFFFFFFF" />
+        android:paddingBottom="2dp" />
 
     <TextView
+        android:id="@+id/ots_roles"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:textColor="#FF90A4AE"
         android:textSize="11sp"
-        android:textColor="#FF78909C"
-        android:lineSpacingMultiplier="1.15"
-        android:text="Teammates do not need this plugin. Your marker changes colour and carries a line of text saying why and for how long, which any TAK client shows.\n\nA status clears itself when the timer runs out, and when ATAK closes. A forgotten status is worse than none - the team routes around somebody who is actually available." />
+        android:visibility="gone" />
 
-    <TextView
-        android:id="@+id/sb_version"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:textSize="10sp"
-        android:textColor="#FF546E7A" />
+        android:orientation="horizontal"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp">
+
+        <Button
+            android:id="@+id/ots_connect"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="Connect"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/ots_refresh"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="Refresh"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- Section chooser. Filled in code from OtsSection so adding a view is
+         one line there and nothing here. -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/ots_sections"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
+
+    <!-- Actions for the current section. Only shown where there are any. -->
+    <LinearLayout
+        android:id="@+id/ots_actions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingTop="4dp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/ots_section_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#FF90A4AE"
+        android:textSize="11sp"
+        android:paddingTop="6dp"
+        android:paddingBottom="4dp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:id="@+id/ots_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
 
 </LinearLayout>

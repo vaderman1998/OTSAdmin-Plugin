@@ -5,6 +5,7 @@
     <string name="version_label">v0.1.0</string>
 
     <!-- Settings -->
+    <string name="preferences_summary">Server address and the account OTS Admin signs in with</string>
     <string name="pref_server_title">Server URL</string>
     <string name="pref_server_summary">The https:// address of your OpenTAKServer, e.g. https://tak.example.org</string>
     <string name="pref_username_title">Username</string>
