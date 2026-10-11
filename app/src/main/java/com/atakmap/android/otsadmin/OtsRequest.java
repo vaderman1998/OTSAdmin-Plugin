@@ -250,6 +250,30 @@ public final class OtsRequest {
     }
 
     /**
+     * Issue a certificate, and with it an enrolment data package.
+     *
+     * The one genuinely consequential thing the API offers beyond editing
+     * records: the server generates key material and builds a package the
+     * device can be enrolled with. The field case it serves is somebody
+     * standing in front of you with a phone that is not on the net yet.
+     *
+     * {@code uid} is optional \u2014 omitted, the certificate is for the user
+     * rather than tied to one device.
+     *
+     * Only {@code @auth_required()} server-side, NOT administrator-gated,
+     * which is worth knowing: any account this plugin can log in as can mint
+     * one.
+     */
+    public static OtsRequest issueCertificate(String username, String uid) {
+        List<String> parts = new ArrayList<>();
+        parts.add(OtsJson.pair("username", username));
+        if (uid != null && !uid.trim().isEmpty())
+            parts.add(OtsJson.pair("uid", uid.trim()));
+        return new OtsRequest(Method.POST, "/api/certificate",
+                new LinkedHashMap<String, String>(), OtsJson.of(parts));
+    }
+
+    /**
      * Reset somebody's password as an administrator.
      *
      * The server's rules, mirrored in {@link OtsWriteGuard}: at least
