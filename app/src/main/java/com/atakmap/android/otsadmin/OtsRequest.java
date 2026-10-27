@@ -209,6 +209,35 @@ public final class OtsRequest {
         return new OtsRequest(Method.GET, "/api/groups/members", q, null);
     }
 
+    /**
+     * The groups one user belongs to — the reverse of
+     * {@link #groupMembers}.
+     *
+     * {@code GET /api/users/groups?username=…}, the read side of the same
+     * route {@link #setUserGroups} writes to. Takes {@code username} as a
+     * QUERY parameter, where the PUT takes it in a JSON body.
+     *
+     * Replies {@code {"success":true,"results":[{"group_name":…,
+     * "direction":…,"active":…}]}} — so a FOURTH spelling of these fields
+     * appears here: the group is {@code group_name} (it is {@code name} on
+     * {@code /api/groups/members} and on create, {@code group_name} again on
+     * delete), and membership state is {@code active} in this response while
+     * the column behind it is {@code enabled}. Read by name, never by
+     * assumption.
+     *
+     * A user can legitimately appear TWICE for one group, once per direction,
+     * because the membership table is keyed on (user, group, direction).
+     *
+     * Fails 404 if the username does not exist, and 400 if the server has
+     * LDAP enabled — the same refusal {@link OtsWriteGuard} already mirrors
+     * for writes, except this is a read.
+     */
+    public static OtsRequest userGroups(String username) {
+        Map<String, String> q = new LinkedHashMap<>();
+        q.put("username", username == null ? "" : username);
+        return new OtsRequest(Method.GET, "/api/users/groups", q, null);
+    }
+
     private static OtsRequest get(String path) {
         return new OtsRequest(Method.GET, path,
                 new LinkedHashMap<String, String>(), null);

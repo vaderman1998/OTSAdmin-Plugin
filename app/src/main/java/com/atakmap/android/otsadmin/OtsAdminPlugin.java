@@ -234,6 +234,20 @@ public class OtsAdminPlugin implements IPlugin {
     /** One full-width button per section, straight from the enum. */
     private void buildSectionList() {
         sectionsBar.removeAllViews();
+
+        // Not an OtsSection: /api/status returns one object rather than a
+        // page of rows, so it does not fit the list pane the enum drives.
+        // First in the bar because it is what you want on arriving.
+        Button status = new Button(pluginContext);
+        status.setText("Server status");
+        status.setTextSize(13);
+        status.setAllCaps(false);
+        status.setPadding(16, 6, 16, 6);
+        status.setOnClickListener(v -> showServerStatus());
+        sectionsBar.addView(status, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
         for (final OtsSection s : OtsSection.values()) {
             Button b = new Button(pluginContext);
             // A trailing dot marks what can be changed. "(editable)"
@@ -248,6 +262,62 @@ public class OtsAdminPlugin implements IPlugin {
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT));
         }
+    }
+
+    /**
+     * The server dashboard: GET /api/status.
+     *
+     * <b>Read-only, and there is no start or restart to offer.</b> Checked
+     * against the OpenTAKServer source 2026-10-24: none of the twenty API
+     * blueprints calls systemctl, systemd, subprocess or os.system, and the
+     * only route that reports anything about the running system is this one.
+     * So there is no per-service up/down list for nginx, mosquitto, RabbitMQ
+     * or MediaMTX and no way to restart them over the API -- the web UI cannot
+     * do it either, because the endpoint does not exist. A button here would
+     * be a button that lies, which is worse than its absence. The nearest real
+     * controls OTS does expose are per-job, under Scheduled jobs.
+     */
+    private void showServerStatus() {
+        if (session == null || !session.isReady()) {
+            say("Connect to the server first.");
+            return;
+        }
+        say("Reading server status\u2026");
+        run(() -> {
+            final OtsClient.Result r =
+                    session.client().send(OtsRequest.status());
+            ui.post(() -> {
+                String failure = r.failure();
+                if (failure != null) {
+                    say(failure);
+                    return;
+                }
+                final OtsStatus st = OtsStatus.parse(r.body);
+                if (st == null) {
+                    // Deliberately not a dashboard of zeroes: that would read
+                    // as a healthy idle server.
+                    say("the server did not return a readable status");
+                    return;
+                }
+                StringBuilder sb = new StringBuilder();
+                for (OtsStatus.Row row : st.rows()) {
+                    sb.append(row.label).append(":  ")
+                      .append(row.value).append('\n');
+                }
+                if (st.wantsAttention())
+                    sb.append("\nDisk or memory is nearly full.");
+                sb.append("\nOTS exposes no service start/restart over its")
+                  .append(" API, so this view is read-only.");
+                renderSession();
+                new AlertDialog.Builder(MapView.getMapView().getContext())
+                        .setTitle("Server status")
+                        .setMessage(sb.toString())
+                        .setPositiveButton("Close", null)
+                        .setNeutralButton("Refresh",
+                                (d, w) -> showServerStatus())
+                        .show();
+            });
+        });
     }
 
     private void openSection(OtsSection s) {

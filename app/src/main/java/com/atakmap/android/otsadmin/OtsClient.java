@@ -67,6 +67,9 @@ public class OtsClient {
                 return fromBody;
             if (code == 401 || code == 403)
                 return "the server rejected the login (" + code + ")";
+            if (code >= 300 && code < 400)
+                return "the server redirected to a login page, so the session"
+                        + " is not authenticated — try connecting again";
             if (code == 0)
                 return body;
             return "the server returned " + code;
@@ -108,6 +111,15 @@ public class OtsClient {
             conn.setReadTimeout(READ_TIMEOUT_MS);
             conn.setRequestMethod(request.method.name());
             conn.setRequestProperty("Accept", "application/json");
+            // Do NOT follow redirects. Flask-Security answers an
+            // unauthenticated session-auth request with a 302 to the login
+            // page, and HttpURLConnection follows redirects by default -- so
+            // the call would come back HTTP 200 carrying a page of HTML, which
+            // reads as success and then parses to nothing. Measured on the
+            // live server: /api/status and /api/groups/all both answer 302
+            // unauthenticated, where the role-guarded routes answer 403.
+            // Left unfollowed, the 3xx is visible and reportable.
+            conn.setInstanceFollowRedirects(false);
             // The header Flask-Security looks for. Sent on everything except
             // the login itself, which has nothing to send yet.
             if (hasToken())

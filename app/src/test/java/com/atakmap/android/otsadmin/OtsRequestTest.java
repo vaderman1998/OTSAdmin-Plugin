@@ -300,4 +300,33 @@ public class OtsRequestTest {
                 OtsRequest.deleteUser(null).body);
         assertFalse(OtsRequest.addGroup(null, null).body.contains("null"));
     }
+
+    // ------------------------------------------------------------------
+    // Reading a user's groups: the reverse lookup
+    // ------------------------------------------------------------------
+
+    @Test
+    public void userGroupsIsAQueryParamOnThePluralUsersRoute() {
+        // Note "users", plural, unlike every other /api/user/* endpoint, and
+        // username as a QUERY parameter where the PUT on the same route takes
+        // it in a JSON body.
+        OtsRequest r = OtsRequest.userGroups("medic1");
+        assertEquals(OtsRequest.Method.GET, r.method);
+        assertEquals(BASE + "/api/users/groups?username=medic1", r.url(BASE));
+        assertFalse(r.hasBody());
+    }
+
+    @Test
+    public void userGroupsSurvivesAnAwkwardUsername() {
+        OtsRequest r = OtsRequest.userGroups("a b&c");
+        assertTrue("username must be encoded, not pasted in raw",
+                r.url(BASE).contains("username=a%20b%26c")
+                        || r.url(BASE).contains("username=a+b%26c"));
+    }
+
+    @Test
+    public void userGroupsTreatsNullAsEmptyRatherThanWritingNull() {
+        assertEquals(BASE + "/api/users/groups?username=",
+                OtsRequest.userGroups(null).url(BASE));
+    }
 }

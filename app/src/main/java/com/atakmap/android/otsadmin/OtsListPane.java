@@ -262,6 +262,8 @@ public class OtsListPane {
     private void addRowActions(LinearLayout head, OtsSection which,
             JSONObject row, String name) {
         if (which == OtsSection.USERS) {
+            head.addView(smallButton("Groups",
+                    () -> showUserGroups(name)));
             head.addView(smallButton("Manage",
                     () -> promptManageUser(row, name)));
         } else if (which == OtsSection.SCHEDULER) {
@@ -638,6 +640,85 @@ public class OtsListPane {
 
 
     /** Send a write, report the server's own answer, then reload. */
+    /**
+     * Which groups one account belongs to.
+     *
+     * The reverse of the per-group member list in OtsGroupPane, from
+     * GET /api/users/groups. Read-only on purpose: membership is changed from
+     * the group side, where the direction being added is already in context.
+     *
+     * Three answers get distinct wording, because they mean different things
+     * to whoever is looking:
+     *   - no memberships at all,
+     *   - the account does not exist (the server answers 404), and
+     *   - LDAP is in charge, so the server will not answer at all (400).
+     * Collapsing those into "nothing found" would have an operator hunting a
+     * missing group when the real answer is a typo or LDAP.
+     */
+    private void showUserGroups(final String username) {
+        statusView.setText("Reading groups for " + username + "\u2026");
+        run(() -> {
+            final OtsClient.Result r =
+                    session.client().send(OtsRequest.userGroups(username));
+            ui.post(() -> {
+                String failure = r.failure();
+                if (failure != null) {
+                    if (OtsWriteGuard.looksLikeLdapRefusal(failure))
+                        session.noteLdapRefusal();
+                    say(failure);
+                    return;
+                }
+                List<String> lines = new ArrayList<>();
+                try {
+                    OtsResponse.Page page = OtsResponse.page(r.body);
+                    for (JSONObject row : page.results) {
+                        // group_name here, though the same field is "name" on
+                        // /api/groups/members and on create. Read by name.
+                        String group = readable(row, "group_name");
+                        if (group.isEmpty())
+                            group = readable(row, "name");
+                        String direction = readable(row, "direction");
+                        // "active" in this response; the column behind it is
+                        // called "enabled".
+                        boolean active = row.optBoolean("active", true);
+                        StringBuilder line = new StringBuilder();
+                        line.append(group.isEmpty() ? "(unnamed group)" : group);
+                        if (!direction.isEmpty())
+                            line.append("  \u00b7  ").append(direction);
+                        if (!active)
+                            line.append("  \u00b7  inactive");
+                        lines.add(line.toString());
+                    }
+                } catch (Exception e) {
+                    say("the group list could not be read");
+                    return;
+                }
+
+                String body;
+                if (lines.isEmpty()) {
+                    body = username + " belongs to no groups.";
+                } else {
+                    StringBuilder sb = new StringBuilder();
+                    for (String line : lines)
+                        sb.append("\u2022  ").append(line).append('\n');
+                    // A user can appear twice for one group, once per
+                    // direction, because the membership table is keyed on
+                    // (user, group, direction) -- so two rows naming the same
+                    // group is correct, not a duplicate to be filtered.
+                    sb.append('\n').append(lines.size())
+                      .append(lines.size() == 1 ? " membership" : " memberships");
+                    body = sb.toString();
+                }
+                statusView.setText("");
+                new AlertDialog.Builder(MapView.getMapView().getContext())
+                        .setTitle("Groups for " + username)
+                        .setMessage(body)
+                        .setPositiveButton("Close", null)
+                        .show();
+            });
+        });
+    }
+
     private void write(final OtsRequest request, final String successText) {
         statusView.setText("Working…");
         run(() -> {
